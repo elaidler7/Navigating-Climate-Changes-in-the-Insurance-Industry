@@ -1,0 +1,1347 @@
+---
+title: "604 Final Project"
+output: html_document
+date: "2023-10-12"
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r, include = FALSE}
+climate <- read.csv("~/Desktop/Frequently Accessed /All Folders/Transfer to backup for Umass Google docs/School/Graduate School/Y1S2/DACSS 601/Final Project/climate.csv")
+print(head(climate))
+```
+
+In the following step, I tidy the data. 
+```{r, include = FALSE}
+#Data Tidying
+
+#Change the column names to represent the months of the year:
+
+climate2 <- climate
+colnames(climate2) = c("a", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
+climate3 <- climate2
+library(tidyverse)
+climate3 <- climate3 %>% add_row("a" = 01001011895, "January" = 7.03, "February" = 2.96, "March" = 8.36, "April" = 3.53, "May" = 3.96, "June"  = 5.40, "July" = 3.92, "August" = 3.36, "September" = 0.73, "October" = 2.03, "November" = 1.44, "December" = 3.66, .before = 1)
+
+#Change the row names:
+
+#(1) Establish the row names.
+climate4 <- climate3
+rownames(climate4) = climate4$a
+
+#(2) Eliminate the now unnecessary column a.
+climate5 <- climate4[,-(1),drop=FALSE] 
+
+#Create function that counts the number of digits in a number.
+nDigits <- function(x) nchar(trunc(abs(x)))
+
+#In the code below, I discovered that row names have either 10 or 11 digits.
+#This is because the state ID's at the beginning have either 1 or 2 digits, 
+#depending on whether it is single- or double-digit.
+sum_10 = 0
+sum_11 = 0
+for(i in 1:nrow(climate5)){
+  if (nDigits(as.numeric(rownames(climate5)[i])) != 10){
+    sum_11 = sum_11 + 1
+  }
+  if (nDigits(as.numeric(rownames(climate5)[i])) != 11){
+    sum_10 = sum_10 + 1
+  }
+}
+
+#Confirm that all of the state ID's are either 1 or 2 digits. sum_10 represents 
+#number of single-digit state IDs; sum_11 is number of double-digit state ID's.
+(sum_11 + sum_10) == nrow(climate5)
+
+#Now we have confirmed that the state ID's either have 1 or 2 digits, 
+#and hence that the row names have either 10 or 11 digits total. 
+#We need to deal with both of these cases.
+
+#Create 4 columns: state, division, metric, or year based on the codings in the row 
+#names, and taking into account the cases when the row names are either 10 or 11 
+#digits. 
+
+#Contains the number of digits for each row name.
+name_num = nDigits(as.numeric(rownames(climate5)))
+
+climate_try <- climate5 %>%
+mutate(state = ifelse(name_num == 11, as.numeric(substr(rownames(climate5), 1,2)), as.numeric(substr(rownames(climate5), 1,1))),
+       division = ifelse(name_num == 11, as.numeric(substr(rownames(climate5), 3,5)), as.numeric(substr(rownames(climate5), 2,4))),
+       metric = ifelse(name_num == 11, as.numeric(substr(rownames(climate5), 6,7)), as.numeric(substr(rownames(climate5), 5,6))),
+       year = ifelse(name_num == 11, as.numeric(substr(rownames(climate5), 8,11)), as.numeric(substr(rownames(climate5), 7,10))))
+
+climate6 <- climate_try
+
+#Add another column to explicitly describe what metric number codings 1, 2, 27, and #28 refer to.
+climate7 <- climate6 %>%
+  mutate(metric_name = case_when(
+    metric == 1 ~ "Precipitation",
+    metric == 2 ~ "Average Temperature",
+    metric == 27 ~ "Maximum Temperature",
+    metric == 28 ~ "Minimum Temperature"
+  ))
+
+#Rename row names to simply be ID numbers from 1 to 400,636. 
+climate8 <- climate7
+rownames(climate8) = 1:400636
+
+head(climate8)
+```
+
+```{r, include = FALSE}
+#Further Data Tidying
+
+#Check to see how many non-precipitation measurements there are.
+sum6 <- sum(((climate8[,15] != 1)))
+
+#Remove the metric and metric_name columns.
+climate9 <- subset(climate8, select = -c(metric, metric_name))
+
+#Remove all rows which are associated with 2022. 
+climate_new <-subset(climate9, year !="2022")
+climate <- climate_new
+
+#Check to see if there are any more rows with negative values.
+sum(climate9[1:12,] <0)
+climate <- climate9
+```
+
+Explorative Data Plots: 
+
+```{r}
+library(dplyr)
+
+# Assuming 'climate' is your original data frame
+
+# Create a new data frame with total precipitation for each year
+total_precip_year <- climate %>%
+  filter(year != 2022, state %in% c(1, 2, 3)) %>%
+  group_by(year) %>%
+  summarize(Total_Precipitation = sum(January, February, March, April, May, June, July, August, September, October, November, December))
+
+# Print or view the new data frame
+print(total_precip_year)
+
+library(ggplot2)
+
+# Assuming 'total_precip_year' is your new data frame
+
+# Create a plot
+ggplot(total_precip_year, aes(x = year, y = Total_Precipitation)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Total Precipitation in the United States (Yearly)",
+       x = "Year",
+       y = "Total Precipitation") +
+  theme_minimal() +
+  coord_cartesian(ylim = c(900, NA))
+
+```
+
+#1: Plot the data in spaces of 20 years since 1895 to now for entire country. note dust bowl and also droughtin 50s in texas and califronia 
+```{r}
+plot1 <- ggplot(total_precip_year, aes(x = year, y = Total_Precipitation)) +
+  geom_bar(stat = "identity", fill = "light green") +
+  geom_smooth(method = "lm", se = FALSE, color = "gray", size = 1) +  # Add this line
+  labs(title = "Total Annual Precipitation Across the United States",
+       x = "Year",
+       y = "Precipitation (in inches)") +
+  theme_minimal() +
+  theme(
+  plot.title = element_text(size = 20, vjust = 1.5, hjust = 0.5),
+  axis.text.y = element_text(size = rel(1.1)),
+  axis.text.x = element_text(size = rel(1.1))
+) +
+  coord_cartesian(ylim = c(5000, NA)) +
+  theme(axis.title.y = element_text(size = 15, vjust = 2, margin = margin(t = 14))) +
+theme(axis.title.x = element_text(size = 14, vjust = 2, margin = margin(t = 10)))
+
+# Save the plot using png
+png("plot1.png", width = 10, height = 6, units = "in", res = 300)
+print(plot1)
+dev.off()
+```
+Plot 2: plot the data in spaces of 20 years since 1895 to now in one particular state or in a few rainy states 
+```{r}
+
+```
+
+
+plot 2:
+```{r}
+#BY YEAR
+cumulative_prec_mo <- climate %>% group_by(state, year) %>% summarize(January_sum = sum(January), February_sum = sum(February), March_sum = sum(March), April_sum = sum(April), May_sum = sum(May), June_sum = sum(June), July_sum = sum(July), August_sum = sum(August), September_sum = sum(September), October_sum = sum(October), November_sum = sum(November), December_sum = sum(December))
+
+cumulative_prec_mo2 <- cumulative_prec_mo %>%
+  rowwise() %>%
+  mutate(Annual_sum = sum(January_sum:December_sum))
+
+cumulative_prec_year = cumulative_prec_mo2 %>%
+  select(state, year, Annual_sum) %>%
+  filter(state %in% c(1, 2), year != 2022)
+cumulative_prec_year
+
+
+# Assuming 'total_precip_year' is your data frame
+
+# Filter data for Alabama (State 1) from 2005 to 2021
+state_1_data <- cumulative_prec_year %>%
+  filter(state == 1, year >= 1990 & year <= 2021)
+
+# Create a line plot
+plot2 <- ggplot(state_1_data, aes(x = year, y = Annual_sum, group = 1)) +
+  geom_line(color = "blue", size = 1.4) +
+  labs(title = "Annual Precipitation in Alabama (1990-2021) ",
+       x = "Year",
+       y = "Precipitation (in inches)") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 20, vjust = 1.5, hjust = 0.5),  # Center the title horizontally
+    axis.title.y = element_text(size = 15, vjust = 2.2, margin = margin(t = 32)),
+    axis.title.x = element_text(size = 14, vjust = 1.9),  # Adjust the y-axis text size 
+    axis.text.y = element_text(size = rel(1.1)),
+    axis.text.x = element_text(size = rel(1.1))
+  ) +  # Adjust the y-axis text size 
+  scale_y_continuous(labels = scales::comma) 
+
+
+# Save the plot using png
+png("plot2.png", width = 10, height = 6, units = "in", res = 300)
+print(plot2)
+dev.off()
+```
+plot 3:
+1 and 34 good. line plots for comparing two states as you can see they are quite diferent 
+```{r}
+cumulative_prec_mo2
+cumulative_prec_year2 = cumulative_prec_mo2 %>%
+  select(state, year, Annual_sum) %>%
+  filter(state %in% c(9, 14), year != 2022)
+cumulative_prec_year2
+
+# Filter data for Georgia (State 9) and Indiana (State 12) from 1990 to 2021
+state_data <- cumulative_prec_year2 %>%
+  filter(state %in% c(9, 14), year >= 1990 & year <= 2021)
+
+# Create a line plot
+plot3 <- ggplot(state_data, aes(x = year, y = Annual_sum, group = state, color = factor(state))) +
+  geom_line(size = 1.3) +
+  labs(title = "Annual Precipitation in Georgia and Kansas (1990-2021)",
+       x = "Year",
+       y = "Total Precipitation (in inches)",
+       color = "State") +
+  theme_minimal() +  
+  theme(
+    plot.title = element_text(size = 20, vjust = 1.5, hjust = 0.5),  # Center the title horizontally
+    axis.title.y = element_text(size = 14, vjust = 2, margin = margin(t = 102)),
+    axis.title.x = element_text(size = 14, vjust = 1.9),  # Adjust the y-axis text size 
+    axis.text.y = element_text(size = rel(1.1)),
+    axis.text.x = element_text(size = rel(1.1))
+  ) +
+  scale_color_manual(values = c("9" = "#40E0D0", "14" = "orange"),
+                     labels = c("9" = "Georgia", "14" = "Kansas")) +  # Adjust the y-axis text size 
+  scale_y_continuous(labels = scales::comma) 
+
+#plot3 <- plot3 + theme(text = element_text(family = "Times New Roman"))
+
+
+png("plot3.png", width = 10, height = 6, units = "in", res = 300)
+print(plot3)
+dev.off()
+```
+plot 4 and plot 5
+```{r}
+
+cumulative_prec_year3 = cumulative_prec_mo2 %>%
+  select(state, year, Annual_sum) %>%
+  filter(state %in% c(1, 12), year != 2022)
+
+# Filter data for Alabama (State 1) and Indiana (State 2) from 1990 to 2021
+state_data <- cumulative_prec_year3 %>%
+  filter(state %in% c(1, 12), year >= 2017 & year <= 2021)
+
+# Create a bar plot
+plot4 <- ggplot(state_data, aes(x = as.factor(year), y = Annual_sum, fill = factor(state))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Annual Precipitation in Alabama and Indiana (2017-2021)",
+       x = "Year",
+       y = "Total Precipitation (in inches)",
+       fill = "State") +
+  scale_fill_manual(values = c("lavender", "pink")) +  # Specify your custom colors here
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 20, vjust = 1.5, hjust = 0.5),  # Center the title horizontally
+    axis.title.y = element_text(size = 13, vjust = 2, margin = margin(t = 102)),
+    axis.title.x = element_text(size = 13, vjust = 2.2, margin = margin(t = 6)),  # Adjust the y-axis text size 
+    axis.text.y = element_text(size = rel(1.1)),
+    axis.text.x = element_text(size = rel(1.1))
+  ) +
+  scale_fill_manual(values = c("lavender", "pink"), labels = c("1" = "Alabama", "12" = "Indiana"))
+
+png("plot4.png", width = 9.5, height = 5.7, units = "in", res = 300)
+print(plot4)
+dev.off()
+
+plot5 <- ggplot(state_data, aes(x = year, y = Annual_sum, fill = factor(state))) +
+  geom_area(position = "stack") +
+  labs(title = "Annual Precipitation in Alabama and Indiana (2017-2021)",
+       x = "Year",
+       y = "Total Precipitation (in inches)",
+       fill = "State") +
+  scale_fill_manual(values = c("lavender", "pink")) +  # Customize colors here
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 18, vjust = 1.5, hjust = 0.5),  # Center the title horizontally
+    axis.title.y = element_text(size = 13, vjust = 2, margin = margin(t = 102)),
+    axis.title.x = element_text(size = 13, vjust = 2.2, margin = margin(t = 6)),  # Adjust the y-axis text size 
+    axis.text.y = element_text(size = rel(1.1)),
+    axis.text.x = element_text(size = rel(1.1))
+  ) +
+  scale_fill_manual(values = c("lavender", "pink"), labels = c("1" = "Alabama", "12" = "Indiana"))
+
+png("plot5.png", width = 9.4, height = 5.64, units = "in", res = 300)
+print(plot5)
+dev.off()
+```
+table 1: 
+from 2017 to 2021, a table of the highest preciptiation monnths with a column saying the preciptiation amount and the state associated 
+make sure to say what the states are 
+```{r}
+cumulative_prec_mo2 <- climate_recent %>% group_by(state, year) %>% summarize(January = sum(January), February = sum(February), March = sum(March), April = sum(April), May = sum(May), June = sum(June), July = sum(July), August = sum(August), September = sum(September), October = sum(October), November = sum(November), December = sum(December))
+
+# Create a table with the top N states for each month
+top_states_table <- cumulative_prec_mo2 %>%
+  pivot_longer(cols = -c(state, year), names_to = "month", values_to = "precipitation") %>%
+  group_by(month) %>%
+  top_n(5, wt = precipitation) %>%
+  arrange(month, desc(precipitation)) %>%
+  ungroup()
+
+colnames(top_states_table) <- c("State", "Year", "Month", "Precipitation")
+
+
+
+library(dplyr)
+library(gt)
+
+# Mapping between state codes and names
+state_mapping <- c("9" = "Georgia", "23" = "Missouri", "41" = "Texas", "44" = "Virginia")
+
+# Replace numeric state codes with names
+top_states_table <- top_states_table %>%
+  mutate(State = state_mapping[as.character(State)])
+
+# Remove grouping
+top_states_table <- top_states_table %>% ungroup()
+
+# Create a summary table
+table1 <- top_states_table %>%
+  gt() %>%
+  cols_label(State = "State", Year = "Year", Month = "Month", Precipitation = "Precipitation") %>%
+  cols_move_to_end(Year) %>%
+  cols_move_to_end(Precipitation) %>%
+  tab_header(
+    title = "Highest Precipitation Months Across all States from 2017 to 2021",
+    subtitle = "Total Precipitation, in inches"
+  ) %>%
+  fmt_number(
+    columns = vars(Precipitation),  # Replace with actual column names
+    decimals = 2
+  )
+
+# Display the table
+table1
+
+
+
+
+table1_subset <- head(top_states_table, n = 8)
+  
+  # Get the first 8 rows
+table1_subset <- head(top_states_table, n = 8)
+
+# Create a summary table
+table1 <- table1_subset %>%
+  gt() %>%
+  cols_label(State = "State", Year = "Year", Month = "Month", Precipitation = "Precipitation") %>%
+  cols_move_to_end(Year) %>%
+  cols_move_to_end(Precipitation) %>%
+  tab_header(
+    title = "Highest Precipitation Months Across all States from 2017 to 2021",
+    subtitle = "Total Precipitation, in inches"
+  ) %>%
+  fmt_number(
+    columns = vars(Precipitation),  # Replace with actual column names
+    decimals = 2
+  )
+
+#doesntn work
+#gtsave(table1_gtsummary %>% slice_head(n = 8), file = "summary_table.png", path = getwd())
+
+
+```
+
+plot 6:
+line plot of five states in the same region from 2017 to 2021 with a line graph  (a particularly rainy subset)
+find rainy subset
+```{r}
+cumulative_prec_mo2 <- cumulative_prec_mo %>%
+  rowwise() %>%
+  mutate(Annual_sum = sum(January_sum:December_sum))
+
+cumulative_prec_year2 = cumulative_prec_mo2 %>%
+  select(state, year, Annual_sum) %>%
+  filter(state %in% c(8, 1, 16, 38, 9, 40, 26, 42, 2, 5), year != 2022)
+cumulative_prec_year2
+
+# Filter data for Georgia (State 9) and Indiana (State 12) from 1990 to 2021
+state_data <- cumulative_prec_year2 %>%
+  filter(state %in% c(8, 1, 16, 38, 9, 40, 26, 42, 2, 5), year >= 1990 & year <= 2021)
+
+# Create a line plot
+plot6 <- ggplot(state_data, aes(x = year, y = Annual_sum, group = state, color = factor(state))) +
+  geom_line() +
+  labs(title = "Precipitation in Southeastern (Blue) and Southwestern (Red) States (1990-2021)",
+       x = "Year",
+       y = "Total Precipitation (in inches)",
+       color = "State") +
+  theme_minimal() +  
+  theme(
+    plot.title = element_text(size = 14, vjust = -3, hjust = 0.5),  # Center the title horizontally
+    axis.title.y = element_text(size = 13, vjust = 1.1, margin = margin(r = 10)),
+    axis.title.x = element_text(size = 12, vjust = 2.2, margin = margin(t = 3)),  # Adjust the y-axis text size 
+    axis.text.y = element_text(size = rel(1.1)),
+    axis.text.x = element_text(size = rel(1.1))
+  ) +
+  scale_color_manual(values = c("9" = "blue", "8" = "blue", "1" = "blue", "16" = "blue", "38" = "blue", "40" = "blue", "26" = "red", "42" = "red", "2" = "red", "5" = "red"),
+                     labels = c("9" = "Georgia", "8" = "Florida", "1" = "Alabama", "16" = "Louisiana", "38" = "South Carolina", "40" = "Tennessee", "26" = "Nevada", "42" = "Utah", "2" = "Arizona", "5" = "Colorado")) +   
+  scale_y_continuous(labels = scales::comma) 
+
+png("plot6.png", width = 9.3, height = 5.58, units = "in", res = 300)
+print(plot6)
+dev.off()
+
+#8 florida, 1 alabama, 16 louisiana, 38 south carolina , 9 georgia, 40 tennessee 
+#driest Nevada 26, Utah 42, arizona 2, colorado 5
+```
+
+plot 7: boxplot comparison of southeast and southwest regions of the us from 2017 to 2021
+```{r}
+library(ggridges)
+library(dplyr)
+
+# Assuming you have a data frame named `precipitation_data` with columns like "State" and "Precipitation"
+# Assuming you have a mapping of states to regions in a data frame named `state_region_mapping`
+
+cumulative_prec_mo2
+cumulative_prec_mo22 <- cumulative_prec_mo2 %>%
+                  filter(year == '2017' | year == '2018' | year == '2019' | year == '2020' | year == '2021')
+
+
+# Example state to region mapping
+state_region_mapping <- data.frame(
+  state = c(8, 1, 16, 38, 9, 40, 26, 42, 2, 5),
+  Region = c("Southeast", "Southeast", "Southeast", "Southeast", "Southeast", "Southeast", "Southwest", "Southwest", "Southwest", "Southwest")
+)
+
+#8 florida, 1 alabama, 16 louisiana, 38 south carolina , 9 georgia, 40 tennessee 
+#driest Nevada 26, Utah 42, arizona 2, colorado 5
+
+# Merge precipitation_data with state_region_mapping
+precipitation_data <- cumulative_prec_mo22 %>%
+  left_join(state_region_mapping, by = "state")
+
+subset_data <- precipitation_data %>%
+  filter(Region %in% c("Southwest", "Southeast"), year != 2022)
+
+
+subset_data_west <- subset_data[subset_data$Region == "Southwest", ]
+subset_data_east <- subset_data[subset_data$Region == "Southeast", ]
+
+# Create a box plot
+plot7 <- boxplot(Annual_sum ~ Region, data = subset_data, 
+        ylim = c(0, 150000),
+        col = c("lightcoral", "blue"),  # Set colors for West and East, respectively
+        main = "Total Annual Precipitation Across US Southwest and Southeast Regions, 2017-2021",
+        xlab = "Region",
+        ylab = "Precipitation (inches)")
+
+png("plot7.png", width = 9.3, height = 5.58, units = "in", res = 300)
+print(plot7)
+dev.off()
+
+
+
+plot7 <- ggplot(subset_data, aes(x = Region, y = Annual_sum, fill = Region)) +
+  geom_boxplot() +
+  ylim(0, 150000) +
+  labs(
+    title = "Total Annual Precipitation Across US Southwest and Southeast Regions, 2017-2021",
+    x = "Region",
+    y = "Precipitation (inches)"
+  ) +
+  coord_cartesian(ylim = c(0, 120000)) +  # Limit the y-axis range
+  theme_minimal()
+
+# Save the ggplot as a PNG file
+png("plot7.png", width = 9.3, height = 5.58, units = "in", res = 300)
+print(plot7)
+dev.off()
+```
+
+Plot 8:
+
+```{r}
+library(leaflet)
+library(rnaturalearth)
+library(sf)
+
+cumulative_prec_mo <- climate_recent %>% group_by(year, state)  %>% summarize(January_sum = sum(January), February_sum = sum(February), March_sum = sum(March), April_sum = sum(April), May_sum = sum(May), June_sum = sum(June), July_sum = sum(July), August_sum = sum(August), September_sum = sum(September), October_sum = sum(October), November_sum = sum(November), December_sum = sum(December))
+
+cumulative_prec_mo2 <- cumulative_prec_mo %>%
+  rowwise() %>%
+  mutate(Annual_sum = sum(January_sum:December_sum))
+
+cumulative_prec_mo2 = cumulative_prec_mo2 %>% filter(year == 2017)
+
+#Figure out values for breaks
+quantiles <- quantile(cumulative_prec_mo2$Annual_sum, probs = seq(0, 1, 1/3))
+
+# Print the quantile values
+print(quantiles)
+
+
+# Load U.S. states data
+us_states <- ne_states(country = "united states of america", returnclass = "sf")
+
+# Assuming your precipitation data is in a column named "precipitation"
+# You can adjust the breaks and labels based on your data distribution
+breaks <- c(0, 3785.50, 17825.72, Inf)
+labels <- c("Low", "Moderate", "High")
+
+# Create a new column "Category" based on precipitation levels
+cumulative_prec_mo2$Category <- cut(cumulative_prec_mo2$Annual_sum, breaks = breaks, labels = labels, include.lowest = TRUE)
+
+#Add name column
+cumulative_prec_mo2$name <- c("Alabama", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming", "Alaska")
+
+# Merge the cumulative_prec_mo2 data with U.S. states data
+#us_states <- merge(us_states, my_data, by.x = "name", by.y = "State", all.x = TRUE)
+
+#us_states %>% select(name, Category)
+cumulative_prec_mo2 %>% select(name, Category)
+us_states <- merge(us_states, cumulative_prec_mo2, by.x = "name", by.y = "name", all.x = TRUE)
+
+
+# Define colors for each category
+categories <- labels
+colors <- c("yellow", "orange", "red")
+
+map <- leaflet(data = us_states) %>%
+  setView(lng = -98.583333, lat = 39.833333, zoom = 3) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~ifelse(is.na(cumulative_prec_mo2$Category), "gray", colors[match(us_states$Category, categories)]),
+    fillOpacity = 0.7,
+    color = "black",
+    stroke = TRUE,
+    weight = 1,
+    popup = ~name
+  )
+
+# Add a legend to the map
+map <- addLegend(
+  map,
+  position = "bottomright",
+  colors = colors,
+  labels = categories,
+  title = "Legend Title"
+)
+
+# View the map with the legend
+map
+
+
+library(htmlwidgets)
+
+# ... (your previous code)
+
+# Save the leaflet map as an HTML file
+saveWidget(map, file = "my_leaflet_map.html")
+
+
+library(webshot)
+# Save the leaflet map as an HTML file
+saveWidget(map, file = "my_leaflet_map.html")
+
+# Capture a screenshot of the HTML file and save it as a PNG
+webshot("my_leaflet_map.html", file = "my_leaflet_map.png")
+```
+
+MODEL:
+```{r}
+#heavy rain is good
+#winter storm, winter weather, ice storm , heavy snow 
+#hail
+#tornado
+#strong wind, high wind, thunderstorm wind (all good)
+#flood, flash flood, coastal flood (good)
+#drought (good), dense smoke (barely any)
+
+#dust storm : whether it causes damage depends on region 
+
+#Marine Thunderstorm Wind only by region so not good (no states)
+
+#Predictors 
+#I get data from here https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/
+
+#This function helps automate the process of isolating data regarding event type for each state in each year 
+create_df <- function(og_csv, event_type_list){
+  new_df <- og_csv %>%
+  filter(EVENT_TYPE %in% event_type_list) %>%
+  count(STATE)
+  return(new_df)
+}
+
+################
+#All for 2018
+
+storm_details_2018 <- read.csv("storm_details_2018.csv")
+
+#Rain
+rainy_2018 <- create_df(storm_details_2018, "Heavy Rain")
+
+#Winter Weather
+#note: includes DC
+winter_2018 <- create_df(storm_details_2018, c("Winter Storm", "Winter Weather", "Ice Storm", "Heavy Snow"))
+
+#Hail
+hail_2018 <- create_df(storm_details_2018, "Hail")
+
+#Tornadoes
+tornado_2018 <- create_df(storm_details_2018, "Tornado")
+
+#Windy weather
+windy_2018 <- create_df(storm_details_2018, c("Strong Wind", "High Wind", "Thunderstorm Wind"))
+
+#Floods
+flood_2018 <- create_df(storm_details_2018, c("Flood", "Flash Flood", "Coastal Flood"))
+
+#Wildfires Likely (droughts and smo)
+wildfire_2018 <- create_df(storm_details_2018, c("Drought", "Dense Smoke"))
+
+#Dust storms
+duststorm_2018 <- create_df(storm_details_2018, "Dust Storm")
+
+################
+#All for 2019
+
+storm_details_2019 <- read.csv("storm_details_2019.csv")
+
+#Rain
+rainy_2019 <- create_df(storm_details_2019, "Heavy Rain")
+
+#Winter Weather
+#note: includes DC
+winter_2019 <- create_df(storm_details_2019, c("Winter Storm", "Winter Weather", "Ice Storm", "Heavy Snow"))
+
+#Hail
+hail_2019 <- create_df(storm_details_2019, "Hail")
+
+#Tornadoes
+tornado_2019 <- create_df(storm_details_2019, "Tornado")
+
+#Windy weather
+windy_2019 <- create_df(storm_details_2019, c("Strong Wind", "High Wind", "Thunderstorm Wind"))
+
+#Floods
+flood_2019 <- create_df(storm_details_2019, c("Flood", "Flash Flood", "Coastal Flood"))
+
+#Wildfires Likely (droughts and smo)
+wildfire_2019 <- create_df(storm_details_2019, c("Drought", "Dense Smoke"))
+
+#Dust storms
+duststorm_2019 <- create_df(storm_details_2019, "Dust Storm")
+
+
+################
+#All for 2020
+
+storm_details_2020 <- read.csv("storm_details_2020.csv")
+
+#Rain
+rainy_2020 <- create_df(storm_details_2020, "Heavy Rain")
+
+#Winter Weather
+#note: includes DC
+winter_2020 <- create_df(storm_details_2020,c("Winter Storm", "Winter Weather", "Ice Storm", "Heavy Snow"))
+
+#Hail
+hail_2020 <- create_df(storm_details_2020, "Hail")
+
+#Tornadoes
+tornado_2020 <- create_df(storm_details_2020, "Tornado")
+
+#Windy weather
+windy_2020 <- create_df(storm_details_2020, c("Strong Wind", "High Wind", "Thunderstorm Wind"))
+
+#Floods
+flood_2020 <- create_df(storm_details_2020, c("Flood", "Flash Flood", "Coastal Flood"))
+
+#Wildfires Likely (droughts and smo)
+wildfire_2020 <- create_df(storm_details_2020, c("Drought", "Dense Smoke"))
+
+#Dust storms
+duststorm_2020 <- create_df(storm_details_2020, "Dust Storm")
+
+
+##################
+#All for 2021
+storm_details_2021 <- read.csv("storm_details_2021.csv")
+#Example
+YA <- storm_details_2021 %>% group_by(STATE, EVENT_TYPE) %>% summarize(Count_ColdWindChill = sum(EVENT_TYPE == "Cold/Wind Chill"))
+
+#Rain
+rainy_2021 <- create_df(storm_details_2021, "Heavy Rain")
+
+#Winter Weather
+#note: includes DC
+winter_2021 <- create_df(storm_details_2021, c("Winter Storm", "Winter Weather", "Ice Storm", "Heavy Snow"))
+
+#Hail
+hail_2021 <- create_df(storm_details_2021, "Hail")
+
+#Tornadoes
+tornado_2021 <- create_df(storm_details_2021, "Tornado")
+
+#Windy weather
+windy_2021 <- create_df(storm_details_2021, c("Strong Wind", "High Wind", "Thunderstorm Wind"))
+
+#Floods
+flood_2021 <- create_df(storm_details_2021, c("Flood", "Flash Flood", "Coastal Flood"))
+
+#Wildfires Likely (droughts and smo)
+wildfire_2021 <- create_df(storm_details_2021, c("Drought", "Dense Smoke"))
+
+#Dust storms
+duststorm_2021 <- create_df(storm_details_2021, "Dust Storm")
+
+
+
+#Now edit the dataframes so that there are 50 states in each and such that for the states in which there were no incidences of a particular event, the count is 0
+#The function edit_lists performs this desired function
+
+edit_lists <- function (og_list){
+      # Create a vector of states I want to retain (all 50 states)
+      state_list = c("ALABAMA", "ALASKA", "ARIZONA", "ARKANSAS", "CALIFORNIA", "COLORADO", "CONNECTICUT", "DELAWARE", "FLORIDA", "GEORGIA", "HAWAII", "IDAHO", "ILLINOIS", "INDIANA", "IOWA", "KANSAS", "KENTUCKY", "LOUISIANA", "MAINE", "MARYLAND", "MASSACHUSETTS", "MICHIGAN", "MINNESOTA", "MISSISSIPPI", "MISSOURI", "MONTANA", "NEBRASKA", "NEVADA", "NEW HAMPSHIRE", "NEW JERSEY", "NEW MEXICO", "NEW YORK", "NORTH CAROLINA", "NORTH DAKOTA", "OHIO", "OKLAHOMA", "OREGON", "PENNSYLVANIA", "RHODE ISLAND", "SOUTH CAROLINA", "SOUTH DAKOTA", "TENNESSEE", "TEXAS", "UTAH", "VERMONT", "VIRGINIA", "WASHINGTON", "WEST VIRGINIA", "WISCONSIN", "WYOMING")
+      
+      # Create a new data frame with all states I want to include
+      all_states <- data.frame(STATE = state_list)
+      
+      # Left join to add missing states
+      new_list <- merge(all_states, og_list, all.x = TRUE, by = "STATE")
+      
+      # Replace missing values (NAs) with 0
+      new_list[is.na(new_list)] <- 0
+      
+      return(new_list)
+}
+
+#Apply the function such that each of the dataframes now contains all 50 states 
+
+#2018
+winter_2018_50 = edit_lists(winter_2018)
+hail_2018_50 = edit_lists(hail_2018)
+tornado_2018_50 = edit_lists(tornado_2018)
+windy_2018_50 = edit_lists(windy_2018)
+flood_2018_50 = edit_lists(flood_2018)
+wildfire_2018_50 = edit_lists(wildfire_2018)
+duststorm_2018_50 = edit_lists(duststorm_2018)
+
+#2019
+winter_2019_50 = edit_lists(winter_2019)
+hail_2019_50 = edit_lists(hail_2019)
+tornado_2019_50 = edit_lists(tornado_2019)
+windy_2019_50 = edit_lists(windy_2019)
+flood_2019_50 = edit_lists(flood_2019)
+wildfire_2019_50 = edit_lists(wildfire_2019)
+duststorm_2019_50 = edit_lists(duststorm_2019)
+
+#Double check that there are 50 states in each and 0's in all the states with no events:
+nrow(duststorm_2019_50)
+#duststorm_2019_50
+
+#2020
+winter_2020_50 = edit_lists(winter_2020)
+hail_2020_50 = edit_lists(hail_2020)
+tornado_2020_50 = edit_lists(tornado_2020)
+windy_2020_50 = edit_lists(windy_2020)
+flood_2020_50 = edit_lists(flood_2020)
+wildfire_2020_50 = edit_lists(wildfire_2020)
+duststorm_2020_50 = edit_lists(duststorm_2020)
+
+#2021
+winter_2021_50 = edit_lists(winter_2021)
+hail_2021_50 = edit_lists(hail_2021)
+tornado_2021_50 = edit_lists(tornado_2021)
+windy_2021_50 = edit_lists(windy_2021)
+flood_2021_50 = edit_lists(flood_2021)
+wildfire_2021_50 = edit_lists(wildfire_2021)
+duststorm_2021_50 = edit_lists(duststorm_2021)
+
+
+#Now we want the average of the event count for each event type for each state for each year. So if there was 1 dust storm in Alabama in 2018, 2 in 2019, and 3 in 2020, we want the final count to be 2.
+
+#This function performs the task of creating a new dataframe containing all the data from 2018, 2019, and 2020 for each state as well as a column for the average for each state. This function will be used for each event type.
+merge_function <- function(df_2018, df_2019, df_2020){
+  new_df <- merge(df_2018, df_2019, by = "STATE")
+  new_df <- merge(new_df, df_2020, by = "STATE")
+  colnames(new_df) <- c("STATE", "2018", "2019", "2020")
+  new_df <- new_df %>%
+  mutate(Average = rowMeans(select(., "2018", "2019", "2020")))
+}
+
+#Create a new dataframe for each event type containing the data from 2019, 2020, and 2021 as well as the average for each state by using the merge_function
+winter_df <- merge_function(winter_2018_50, winter_2019_50, winter_2020_50)
+hail_df <- merge_function(hail_2018_50, hail_2019_50, hail_2020_50)
+tornado_df <- merge_function(tornado_2018_50, tornado_2019_50, tornado_2020_50)
+windy_df <- merge_function(windy_2018_50, windy_2019_50, windy_2020_50)
+flood_df <- merge_function(flood_2018_50, flood_2019_50, flood_2020_50)
+wildfire_df <- merge_function(wildfire_2018_50, wildfire_2019_50, wildfire_2020_50)
+duststorm_df <- merge_function(duststorm_2018_50, duststorm_2019_50, duststorm_2020_50)
+
+weather_df = data.frame(State = winter_df$STATE, Winter = winter_df$Average, Hail = hail_df$Average, Tornado = tornado_df$Average, Wind = windy_df$Average, Flood = flood_df$Average, Wildfire = wildfire_df$Average, DustStorm = duststorm_df$Average)
+weather_df
+
+
+#dataframe with one column of STATES (alphabetized, 1 in each row), and then for 9 predictors, there is 1 column for the count and one for the categorized variable (low, medium, or high). Later I will add the response variable (the total loss/premium, aka loss ratio, for 2022 for each state). Then it will be ready for GLM
+```
+
+Now I need to get the response variable, which is the 2021 loss ratios. That requires getting the 2021 total premiums, the total claims, and then calculating the loss ratio as the total claims over the total premiums for each state. I take this from https://www.iii.org/publications/a-firm-foundation-how-insurance-supports-the-economy/a-50-state-commitment/incurred-losses-by-state , which represents data from a large body of insurance companies in the United States. Specifically, I import the table containing Incurred Losses By State, Property/Casualty Insurance, 2021 (1) and _. 
+
+First I will import _
+```{r}
+premiums_2021_df <- read.csv("premiums_2021.csv")
+premiums_2021_df$State <- toupper(premiums_2021_df$State) 
+```
+
+Now, I will import the Incurred Losses by State for 2021 (from the archive on the website).
+```{r}
+losses_2021_df <- read.csv("losses_2021.csv")
+losses_2021_df$State <- toupper(losses_2021_df$State)
+```
+
+Now I will merge the two. The last variable, loss ratios, will be the response variable.
+```{r}
+#First remove D.C. from both
+premiums_2021_df <- subset(premiums_2021_df, State != 'D.C.')
+#premiums_losses_2021_df <- subset(premiums_losses_2021_df, State != 'D.C.')
+
+premiums_losses_2021_df <- merge(premiums_2021_df, losses_2021_df, by = "State")
+premiums_losses_2021_df
+colnames(premiums_losses_2021_df) <- c("State", "TotalPremiumAmounts", "TotalLossAmounts")
+premiums_losses_2021_df
+loss_ratio_2021 <- premiums_losses_2021_df$"TotalLossAmounts"/premiums_losses_2021_df$"TotalPremiumAmounts"
+premiums_losses_2021_df$"LossRatios" <- loss_ratio_2021
+```
+
+Check for linearity between dependent and independent variables.
+```{r}
+Y = premiums_losses_2021_df$"TotalLossAmounts"
+winter_X1 = weather_df$Winter
+hail_X2 = weather_df$Hail
+tornado_X3 = weather_df$Tornado
+wind_X4 = weather_df$Wind
+flood_X5 = weather_df$Flood
+wildfire_X6 = weather_df$Wildfire
+duststorm_X7 = weather_df$DustStorm
+
+#Winter
+plot(winter_X1, Y, main = "Scatter Plot of Winter Weather Events vs. Loss Ratio", xlab = "Number of Winter Weather Events", ylab = "Loss Ratio")
+
+#Try again without outlier 
+#Louisiana has an EXTREMELY high loss ratio, at 1.64. I will take it out for now.
+max(Y)
+#premiums_losses_2021_df
+
+Y2 <- Y[-c(18, 34)]
+winter_X1_2 <- winter_X1[-c(18, 34)]
+max(Y2)
+
+#Plot x versus y 
+#some evidence of linear relationship, but not huge
+#roughly, as winter storms increase, loss ratio increases 
+#No particular curvature
+plot(winter_X1_2, Y2, main = "Scatter Plot of Winter vs. Loss", xlab = "Winter", ylab = "Loss Ratio")
+abline(lm(Y2 ~ winter_X1_2), col = "red")
+
+#Plot Residuals for winter (with outliers taken out)
+#roughly around the horizontal line
+lm_model_winter <- lm(Y2 ~ winter_X1_2)
+plot(lm_model_winter$fitted.values, lm_model_winter$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+#Hail
+hail_X2_2 <- hail_X2[-c(18, 34, 43)]
+Y3 <- Y2[-43]
+
+#Plot x versus y (with 3 outliers taken out)
+#some evidence of linear relationship
+#roughly, as hail storms increase, loss ratio increases 
+#No particular curvature
+plot(hail_X2_2, Y3, main = "Scatter Plot of Hail vs. Loss Ratio", xlab = "Hail", ylab = "Loss Ratio")
+abline(lm(Y3 ~ hail_X2_2), col = "blue")
+
+#Plot Residuals for winter 
+#roughly random around the horizontal line
+lm_model_winter <- lm(Y3 ~ hail_X2_2)
+plot(lm_model_winter$fitted.values, lm_model_winter$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+Y2
+#to print the plot above:
+# Create the plot using ggplot
+lm_model_winter_loss <- lm(Y2 ~ winter_X1_2)
+plot <- ggplot(data.frame(Winter = winter_X1_2, Loss = Y2), aes(x = Winter, y = Loss)) +
+  geom_point() +
+  geom_abline(slope = coef(lm_model_winter_loss)[2], intercept = coef(lm_model_winter_loss)[1], col = "red", linetype = "dashed") +
+  labs(title = "Number of Winter Weather Events vs. Incurred Property/Casualty Loss, By State, in 2021", x = "Number of Winter Weather Events", y = "Incurred Property and Casualty Loss, in Dollars")
+
+# Save the plot as a PNG file
+ggsave("winter_loss_scatter_plot.png", plot, width = 8, height = 6)
+
+# Display the plot
+print(plot)
+
+#Tornado
+tornado_X3_2 <- tornado_X3[-c(18, 34, 43)]
+Y4 <- Y2[-43]
+#Plot x versus y (with 3 outliers taken out)
+#some evidence of linear relationship
+#roughly, as tornadoes increase, loss ratio increases 
+#No particular curvature
+plot(tornado_X3_2, Y4, main = "Scatter Plot of Tornado vs. Loss Ratio", xlab = "Tornado", ylab = "Loss Ratio")
+abline(lm(Y4 ~ tornado_X3_2), col = "green")
+
+#Plot Residuals for tornadoes 
+#hard to tell
+lm_model_tornadoes <- lm(Y4 ~ tornado_X3_2)
+plot(lm_model_tornadoes$fitted.values, lm_model_tornadoes$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+#Wind
+
+wind_X4_2 = wind_X4[-c(18, 34)]
+
+#Plot x versus y 
+#some evidence of linear relationship; pretty evenly distributed around line
+#roughly, as wind increase, loss ratio increases 
+#No particular curvature
+plot(wind_X4_2, Y2, main = "Scatter Plot of Tornado vs. Loss Ratio", xlab = "Tornado", ylab = "Loss Ratio")
+abline(lm(Y2 ~ wind_X4_2), col = "purple")
+
+#Plot Residuals for wind 
+#pretty evenly distributed
+lm_model_wind <- lm(Y2 ~ wind_X4_2)
+plot(lm_model_wind$fitted.values, lm_model_wind$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+#Flood
+flood_X5_2 = flood_X5[-c(18, 34, 46)]
+Y6 <- Y2[-46]
+#Plot x versus y 
+#some evidence of linear relationship; pretty evenly distributed around line
+#roughly, as floods increase, loss ratio increases 
+#No particular curvature
+plot(flood_X5_2, Y6, main = "Scatter Plot of Flood vs. Loss Ratio", xlab = "Flood", ylab = "Loss Ratio")
+abline(lm(Y6 ~ flood_X5_2), col = "pink")
+
+#Plot Residuals for flood 
+#pretty evenly distributed
+lm_model_flood <- lm(Y6 ~ flood_X5_2)
+plot(lm_model_flood$fitted.values, lm_model_flood$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+#Wildfire
+wildfire_X6_2 = wildfire_X6[-c(18, 34, 43, 31)]
+Y7 <- Y2[-c(43, 31)]
+
+#Plot x versus y 
+#difficult to see because most states had a low number of wildfires
+#roughly, as wildfires increase, it does seem clear that loss ratio increases 
+#omits 4 outliers including 2 huge outlier
+plot(wildfire_X6_2, Y7, main = "Scatter Plot of Wildfire vs. Loss Ratio", xlab = "Wildfire", ylab = "Loss Ratio")
+abline(lm(Y7 ~ wildfire_X6_2), col = "yellow")
+
+
+#Plot Residuals for wildfires 
+lm_model_wildfire <- lm(Y7 ~ wildfire_X6_2)
+plot(lm_model_wildfire$fitted.values, lm_model_wildfire$residuals, main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+
+#Duststorm
+duststorm_X7_2 = duststorm_X7[-c(18, 34)]
+max(duststorm_X7_2)
+
+#Plot x versus y 
+#not very many states with any dust storms at all so it's hard to tell 
+plot(duststorm_X7_2, Y2, main = "Scatter Plot of Dust storm vs. Loss Ratio", xlab = "DustStorm", ylab = "Loss Ratio")
+abline(lm(Y2 ~ duststorm_X7_2), col = "orange")
+
+```
+
+Now merge the table with the loss ratios to the other table.
+```{r}
+model_2021_df_og <- merge(weather_df, premiums_losses_2021_df)
+
+#remove premium and loss columns
+model_2021_df <- model_2021_df_og[, -which(names(model_2021_df_og) == "TotalPremiumAmounts")]
+model_2021_df <- model_2021_df[, -which(names(model_2021_df) == "TotalLossAmounts")]
+```
+
+Build model. Split into training and test and then validate on the testing set. 
+```{r}
+# Split the data into training and testing sets
+set.seed(123)  # for reproducibility
+train_indices <- sample(1:nrow(model_2021_df), 0.7 * nrow(model_2021_df))
+train_data <- model_2021_df[train_indices, ]
+test_data <- model_2021_df[-train_indices, ]
+
+# Build a linear regression model
+model_2021 <- lm(LossRatios ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = train_data)
+summary(model_2021)
+
+model_2021_claims <- lm(TotalLossAmounts ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df_og)
+
+model_2021_premiums <- lm(TotalPremiumAmounts ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df_og)
+
+# Evaluate the model
+predictions <- predict(model_2021, newdata = test_data)
+mse <- mean((test_data$LossRatios - predictions)^2)
+mse #0.0938!
+```
+It seems that according to the model, hail, tornado, wind, flood, wildfire, and dust storms (all but winter, which has a small positive effect for reasons which can be explored later) are associated with increases in the loss ratio (fewer claim dollars spent per premium dollar).
+
+Now build a model without training/test sets.
+```{r}
+model_2021 <- lm(LossRatios ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df)
+```
+
+```{r}
+weather_df #Louisiana #18 and North Dakota #34, which have very high loss ratios
+model_2021_df_ou <- subset(model_2021_df_og, State != 'LOUISIANA')
+model_2021_df_ou <- subset(model_2021_df_ou, State != 'NORTH DAKOTA')
+model_2021_df_ou
+
+model_2021_2 <- lm(TotalLossAmounts ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df_ou)
+
+# there is no significant evidence of heteroscedasticity because p value is 0.43, not enough to reject null
+library("lmtest")
+bp_test <- bptest(model_2021_2)
+
+#taking out outliers actually makes hail not significant, so that's probably not really a good thing
+summary(model_2021_2)
+
+#with only significant results 
+model_2021_3 <- lm(TotalLossAmounts ~ Hail + Wind + Wildfire, data = model_2021_df_ou)
+summary(model_2021_3)
+
+model_2021_df_ou
+
+#GLM so data cant be negative ; AIC is 1620
+#significant hail, flood, wildfire
+glm_model_2021_4 <- glm(TotalLossAmounts ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, family = Gamma(link = "log"), data = model_2021_df_ou)
+summary(glm_model_2021_4)
+
+lm_model_log_5 <- lm(log(TotalLossAmounts + 1) ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df_ou)
+
+lm_model_6 <- lm(TotalLossAmounts ~ Winter + Hail + Tornado + Wind + Flood + Wildfire + DustStorm, data = model_2021_df_ou)
+
+stepwise_model_log <- step(lm_model_log_5, direction = "forward", trace = 1) #forward is all 7 with aic of 11.4, backwards is all but flood with 13.36
+
+#adjusted R squared is .2 better! at 0.4087. f stat p value is far below 0.05
+summary(lm_model_log_5)
+summary(lm_model_6)
+
+#AIC is a measure that balances goodness of fit with model complexity. It penalizes models with more parameters to avoid overfitting. 
+#Including only significant variables might lead to a more interpretable and parsimonious model. It can be easier to explain and understand the relationship between predictors and the response variable.
+#weigh the benefits of a simpler, more interpretable model against the potential improvement in fit provided by additional variables. If the difference in AIC is small and the additional variables are not practically significant or theoretically justified, you might prefer the more parsimonious model with only significant variables
+
+# Perform forward stepwise regression
+stepwise_model <- step(lm_model_log_5, direction = "backward", trace = 1) #backward is hail + wind + wildfire (AIC 1612); forward is all of the variables (1618). so forward is a bit better, with all variables
+stepwise_model <- step(model_2021_2, direction = "backward") #forward is all (1553.54), backward is hail + wind + wildfire with 1547
+
+
+```
+
+
+Now I will use the previous model to predict on 2022, this time by using the data from 2019, 2020, and 2021. 
+
+```{r}
+#Create a new dataframe for each event type containing the data from 2019, 2020, and 2021 as well as the average for each state by using the merge_function
+winter_df_2 <- merge_function(winter_2019_50, winter_2020_50, winter_2021_50)
+hail_df_2 <- merge_function(hail_2019_50, hail_2020_50, hail_2021_50)
+tornado_df_2 <- merge_function(tornado_2019_50, tornado_2020_50, tornado_2021_50)
+windy_df_2 <- merge_function(windy_2019_50, windy_2020_50, windy_2021_50)
+flood_df_2 <- merge_function(flood_2019_50, flood_2020_50, flood_2021_50)
+wildfire_df_2 <- merge_function(wildfire_2019_50, wildfire_2020_50, wildfire_2021_50)
+duststorm_df_2 <- merge_function(duststorm_2019_50, duststorm_2020_50, duststorm_2021_50)
+
+weather_df_2 = data.frame(State = winter_df_2$STATE, Winter = winter_df_2$Average, Hail = hail_df_2$Average, Tornado = tornado_df_2$Average, Wind = windy_df_2$Average, Flood = flood_df_2$Average, Wildfire = wildfire_df_2$Average, DustStorm = duststorm_df_2$Average)
+#Now the weather_df_2 dataframe contains data from all 50 states, giving the average number of incidents of each event type over the years from 2019 to 2021
+
+
+#2022 data - this will serve later for validation 
+#Import premiums from 2022
+premiums_2022_df <- read.csv("premiums_2022.csv")
+
+#Import losses from 2022
+losses_2022_df <- read.csv("losses_2022.csv")
+colnames(losses_2022_df) <- c("State", "Losses")
+
+#Merge tables and make loss ratio column for 2022
+premiums_losses_2022_df <- merge(premiums_2022_df, losses_2022_df, by = "State")
+colnames(premiums_losses_2022_df) <- c("State", "Total Premium Amounts", "Total Loss Amounts")
+loss_ratio_2022 <- premiums_losses_2022_df$"Total Loss Amounts"/premiums_losses_2022_df$"Total Premium Amounts"
+premiums_losses_2022_df$"LossRatios" <- loss_ratio_2022
+
+```
+
+Make the prediction using the existing model but this time with the new data.
+```{r}
+predictions_2022 <- predict(model_2021, newdata = weather_df_2)
+predictions_2022_model2 <- predict(model_2021_2, newdata = model_2021_df_ou)
+predictions_model3 <- predict(model_2021_3, newdata=weather_df_2)
+predictions_glm_model4 <- predict(glm_model_2021_4, newdata = model_2021_df_ou)
+predictions_log_model5_og <- predict(lm_model_log_5, newdata = model_2021_df_ou)
+#undo log transform
+predictions_log_model5 <- exp(predictions_log_model5_og) - 1
+
+```
+
+Test results.
+```{r}
+mse <- mean((loss_ratio_2022*100 - predictions_2022*100)^2)
+sqrt(mse)
+loss_ratio_2022*100
+predictions_2022*100
+rmse <- sqrt(mse)
+rmse
+
+
+
+total_losses_2022 <- premiums_losses_2022_df$"Total Loss Amounts"
+
+#test model with all variables and losses as response variable. model 2
+#if predictions are <0, set to 0
+summary(model_2021_2)
+predictions_2022_model2_2 <- pmax(predictions_2022_model2, 0)
+mse <- mean((total_losses_2022 - predictions_2022_model2_2)^2)
+total_losses_2022
+predictions_2022_model2_2
+rmse = sqrt(mse) #15,536,049
+range(total_losses_2022) #681,473 66,957,499
+range(predictions_2022_model2_2) #0 36,626,726
+
+#test other model with just hail wildfire wind and with losses as response variable
+
+mse <- mean((total_losses_2022*100 - predictions_model3*100)^2)
+sqrt(mse)
+loss_ratio_2022*100
+predictions_2022*100
+rmse <- sqrt(mse)
+rmse
+
+#predictions for glm model 4
+mse <- mean((total_losses_2022 - predictions_glm_model4)^2)
+rmse <- sqrt(mse)
+rmse #180,008,784
+total_losses_2022
+predictions_glm_model4
+
+#predictions for log model
+mse <- mean((total_losses_2022 - predictions_log_model5)^2)
+rsme = sqrt(mse) #15,594,978
+summary(lm_model_log_5)
+#hail, wind, wilddfire, duststorm . so it added another significant relationship. and lowered the others. only flood isn't associated oddly . hard to interpret tho when we made log response variable
+#convert coefficients to normal form 
+coeff_unlog_hail = exp(coef(lm_model_log_5)['Hail']) - 1 
+coeff_unlog_hail
+coeff_unlog_wind = exp(coef(lm_model_log_5)['Wind']) - 1   
+coeff_unlog_wind
+coeff_unlog_wildfire = exp(coef(lm_model_log_5)['Wildfire']) - 1   
+coeff_unlog_wildfire
+
+
+mse <- mean((total_losses_2022 - predictions_glm_model4)^2)
+```
+
+
+
+
+
+unused:
+
+```{r}
+library(ggplot2)
+
+# Assuming cumulative_prec_mo is your data frame
+# Make sure that 'state' is a factor and 'year' is numeric
+
+# Create a plot
+ggplot(cumulative_prec_year, aes(x = as.factor(cut(year, breaks = seq(1895, 2021, by = 20))), y = Annual_sum, fill = state)) +
+  
+  # Customize the plot
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Cumulative Precipitation by State (1895-2021)",
+       x = "Year Intervals",
+       y = "Cumulative Precipitation") +
+  scale_x_discrete(labels = seq(1895, 2021, by = 20)) +
+  theme_minimal()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Trends in Precipitation / Highest and Lowest
+Metric 1: Finding highest and lowest cumulative precipitation from 2017 - 2021.
+
+There are different metrics for calculating highest precipitation. 
+
+Highest:
+
+The first metric I will use is a calculation of the total cumulative precipitation from 2017 to 2021 for each state. The order of states with the highest precipitation measurements for the first metric are 9, 41, 15, 44, 40, 31, 22.
+
+```{r}
+library(tidyverse)
+
+#Subset the dataset to include only the data from 2017-2021
+climate_recent <- climate %>%
+                  filter(year == '2017' | year == '2018' | year == '2019' | year == '2020' | year == '2021')
+
+#Create new columns in the dataset such that January_sum, February_sum, etc. all contain the total precipitation which occurred over all regions in the state. For instance, January_sum represents the sum of the precipitation which fell in January 2017, January 2018, and so on.
+cumulative_prec_mo <- climate_recent %>% group_by(state) %>% summarize(January_sum = sum(January), February_sum = sum(February), March_sum = sum(March), April_sum = sum(April), May_sum = sum(May), June_sum = sum(June), July_sum = sum(July), August_sum = sum(August), September_sum = sum(September), October_sum = sum(October), November_sum = sum(November), December_sum = sum(December))
+
+#Now we add all the months together for each state and put the calculation into the Total Precipitation column. Each value of the total precipitation column represents the total cumulative precipitation which occurred for a particular state in the period from 2017 to 2021. 
+cumulative_prec_1 <- cumulative_prec_mo %>%
+  mutate(Total_Precip = rowSums(select(cumulative_prec_mo, -state), na.rm = TRUE))
+
+cumulative_prec <- cumulative_prec_1
+head(cumulative_prec, 15)
+
+cumulative_prec %>% arrange(desc(Total_Precip))
+#Highest states: 9, 41, 15, 44, 40, 31, 22
+```
+
+Lowest: As stated before, I calculated the total cumulative precipitation from 2017 to 2021 for each state. The order of states with the lowest precipitation measurements for this metric were 7, 2, 26, 37, 48, 6, 29.
+
+I also calculated the average precipitation for per year over the period from 2017 to 2021 for each state. ____
+
+```{r}
+cumulative_prec %>% arrange(Total_Precip)
+#Lowest states: 7, 2, 26, 37, 48, 6, 29
+
+#cumulative_prec %>% arrange(Average_Yrly_Precip)
+#Lowest states: also 7, 2, 26, 37, 48, 6, 29
+```
+
+
+
+Metric 2: Find the states with the highest average for max precipitation months in a year and the states with the lowest average for low precipitation months.
+```{r}
+library(tidyverse)
+climate_recent <- climate %>%
+                  filter(year == '2017' | year == '2018' | year == '2019' | year == '2020' | year == '2021')
+climate_recent
+head(climate_recent, 900)
+
+summarized_data <- climate_recent %>%
+  group_by(year, state) %>%
+  summarize(Total_Precipitation = sum(January, na.rm = TRUE))
+summarized_data
+
+# create a column for each month of every year to show the sum over all the divisions in the state for that month in that year 
+cumulative_prec_mo <- climate_recent %>% group_by(year)  %>% summarize(January_sum = sum(January), February_sum = sum(February), March_sum = sum(March), April_sum = sum(April), May_sum = sum(May), June_sum = sum(June), July_sum = sum(July), August_sum = sum(August), September_sum = sum(September), October_sum = sum(October), November_sum = sum(November), December_sum = sum(December))
+cumulative_prec_mo
+
+#Equivalent approach to the above. It is just more concise. we will use this one.
+library(tidyr)
+result <- climate %>%
+  group_by(state, year) %>%
+  summarize(
+    across(starts_with("January"):ends_with("December"), sum, na.rm = TRUE))
+head(result, 200)
+
+cumulative_prec_mo
+```
+ 
+
+highest are
+41, 9, 44, 40, 15, 23
+
+lowest are
+7, 26, 37, 2, 6, 48
+
+Filter for 2017 to 2021
+```{r}
+result3 <- climate_recent %>% group_by(state) %>% summarize(January_mean = mean(January), February_mean = mean(February), March_mean = mean(March), April_mean = mean(April), May_mean = mean(May), June_mean = mean(June), July_mean = mean(July), August_mean = mean(August), September_mean = mean(September), October_mean = mean(October), November_mean = mean(November), December_mean = mean(December))
+result3
+
+#now find the max for each state 
+result4 <- result3%>%
+  group_by(state) %>%
+  summarize(Max_Precipitation = max(c_across(matches("Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec")), na.rm = TRUE))
+result4
+
+#Arrange in descending order (highest to lowest)
+result4 %>% arrange(desc(Max_Precipitation))
+
+#Arrange in ascending order (lowest to highest)
+result4 %>% arrange(Max_Precipitation)
+```
+
+metric 1 highest: 9, 41, 15, 44, 40, 31, 22.
+metric 2 highest: 41, 9, 44, 40, 15, 23
+--> in common in highest 7: 9, 41, 15, 44 (though not in same order)
+
+metric 1 lowest: 7, 2, 26, 37, 48, 6, 29
+metric 2 lowest: 7, 26, 37, 2, 6, 48
+--> in common in lowest 7: 7, 26, 2, 37, 6 (though not in same order)
+
+
